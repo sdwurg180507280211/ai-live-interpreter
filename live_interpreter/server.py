@@ -65,9 +65,13 @@ def _can_view(request: web.Request) -> bool:
     auth = _auth(request)
     if auth is None:
         return True
-    store: SettingsStore = request.app[SETTINGS_KEY]
+    # 带了观众口令就只认口令：观众链接在已登录的浏览器里也一样会因重置而失效。
+    # 不带口令（控制台里「打开字幕屏」）才按登录状态放行。
     key = request.query.get("key", "")
-    return bool(key) and hmac.compare_digest(key.encode(), store.view_token.encode()) or auth.is_logged_in(request)
+    if key:
+        store: SettingsStore = request.app[SETTINGS_KEY]
+        return hmac.compare_digest(key.encode(), store.view_token.encode())
+    return auth.is_logged_in(request)
 
 
 def _require_login(request: web.Request) -> None:
@@ -162,8 +166,9 @@ async def reset_view_link(request: web.Request) -> web.Response:
     store: SettingsStore = request.app[SETTINGS_KEY]
     token = store.reset_view_token()
     # 已经打开的字幕屏也立即失效：断开后它们重连会被拒绝，并提示链接已失效。
-    viewers: set[web.WebSocketResponse] = request.app[VIEWERS_KEY]
-    for ws in list(viewers):
+    # 断开时连接会自己从集合里移除，先复制一份再逐个关闭，计数也用这份
+    viewers = list(request.app[VIEWERS_KEY])
+    for ws in viewers:
         await ws.close(code=CLOSE_LINK_RESET, message="link reset".encode())
     log.info("观众链接已重置，断开 %d 个字幕屏", len(viewers))
     return web.json_response({"ok": True, "view_token": token})
@@ -247,7 +252,7 @@ async def websocket(request: web.Request) -> web.WebSocketResponse:
     sender = asyncio.create_task(pump())
     # 登录用户打开的字幕屏不靠观众链接，重置链接时不断开。
     viewers: set[web.WebSocketResponse] = request.app[VIEWERS_KEY]
-    by_link = _auth(request) is not None and not _auth(request).is_logged_in(request)
+    by_link = _auth(request) is not None and bool(request.query.get("key"))
     if by_link:
         viewers.add(ws)
     try:

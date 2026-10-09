@@ -159,6 +159,19 @@ class ConsoleServerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msg.type, WSMsgType.CLOSE)
         self.assertEqual(viewer.close_code, 4001)
 
+    async def test_reset_also_applies_in_logged_in_browser(self):
+        # 管理员在自己（已登录）的浏览器里打开观众链接，重置后同样要失效
+        await self.login()
+        old = self.store.view_token
+        viewer = await self.client.ws_connect(f"/ws?key={old}")
+        await viewer.receive()
+        await self.client.post("/api/view-link/reset")
+        msg = await asyncio.wait_for(viewer.receive(), 2)
+        self.assertEqual(msg.type, WSMsgType.CLOSE)
+        self.assertEqual((await self.client.get(f"/api/state?key={old}")).status, 403)
+        # 不带口令的字幕屏（控制台里「打开字幕屏」）仍按登录状态放行
+        self.assertEqual((await self.client.get("/api/state")).status, 200)
+
     async def test_display_settings_pushed_to_screens(self):
         viewer = await self.client.ws_connect(f"/ws?key={self.store.view_token}")
         snapshot = json.loads((await viewer.receive()).data)
