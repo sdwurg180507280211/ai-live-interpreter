@@ -1,0 +1,21 @@
+[Unit]
+Description=AI Live Interpreter (AI 同传字幕，云端模式)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=interpreter
+Group=interpreter
+WorkingDirectory=/opt/ai-live-interpreter
+ExecStart=/opt/ai-live-interpreter/venv/bin/python -m live_interpreter serve
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/ai-live-interpreter/data
+
+[Install]
+WantedBy=multi-user.target

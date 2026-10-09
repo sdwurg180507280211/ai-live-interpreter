@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>控制台 · {{BRAND}}</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .topbar { position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, 0.85); backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
+  .topbar-inner { max-width: 1240px; margin: 0 auto; height: 64px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .timer { font-variant-numeric: tabular-nums; }
+  main { max-width: 1240px; margin: 0 auto; padding: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+  .col { display: grid; gap: 24px; }
+  .full { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; }
+
+  /* 收音区 */
+  .controls { display: grid; grid-template-columns: 1fr 200px; gap: 16px; }
+  .mic-row { display: flex; gap: 8px; }
+  .level { margin-top: 18px; display: flex; align-items: center; gap: 12px; }
+  .level .bars { flex: 1; display: grid; grid-template-columns: repeat(32, 1fr); gap: 3px; height: 22px; align-items: end; }
+  .level .bars i { display: block; height: 100%; border-radius: 2px; background: #e9ebf2; transition: background 0.08s; }
+  .level .bars i.on { background: var(--ok); }
+  .level .bars i.on.hot { background: var(--warn); }
+  .level .bars i.on.peak { background: var(--danger); }
+  .level .tag { width: 72px; font-size: 12px; color: var(--fg-3); text-align: right; }
+  .action { display: flex; align-items: center; gap: 16px; margin-top: 22px; }
+  .action .btn-lg { min-width: 200px; }
+  .action .btn-lg.running { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3); }
+  .status-text { font-size: 14px; color: var(--fg-2); }
+  .status-text.err { color: #b91c1c; }
+
+  /* 字幕预览：做成和投屏一样的黑屏 */
+  .screen {
+    position: relative; margin-top: 4px; border-radius: 14px; background: #05060a; color: #fff;
+    min-height: 260px; padding: 22px 26px; display: flex; flex-direction: column; justify-content: flex-end;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); overflow: hidden;
+  }
+  .screen::before { content: "LIVE"; position: absolute; top: 14px; left: 18px; font: 600 11px/1 var(--font); letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.35); }
+  .screen.live::before { color: #f87171; }
+  .screen .seg { margin-top: 10px; animation: rise 0.25s ease-out; }
+  .screen .en { font-size: 13px; color: rgba(255, 255, 255, 0.45); margin-bottom: 2px; }
+  .screen .zh { font-size: 20px; line-height: 1.55; font-weight: 500; }
+  .screen .interim .zh { color: rgba(255, 255, 255, 0.55); }
+  .screen .empty { color: rgba(255, 255, 255, 0.35); text-align: center; margin: auto 0; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* 右栏 */
+  .link-box { display: flex; gap: 8px; }
+  .link-box .field { font-size: 13px; color: var(--fg-2); background: var(--surface-2); }
+  .link-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+  .setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .setting:first-of-type { border-top: 0; padding-top: 0; }
+  .setting .name { font-size: 14px; font-weight: 500; }
+  .setting .desc { font-size: 12px; color: var(--fg-3); }
+  .size-row { display: flex; align-items: center; gap: 12px; width: 190px; }
+  .size-row output { width: 30px; text-align: right; font-variant-numeric: tabular-nums; color: var(--fg-2); font-size: 13px; }
+
+  /* 术语表、会议记录 */
+  .glossary-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; gap: 12px; }
+  .records { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+  .records li { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-top: 1px solid var(--line); }
+  .records li:first-child { border-top: 0; }
+  .records .doc { width: 36px; height: 36px; border-radius: 10px; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; flex: none; }
+  .records .meta { flex: 1; min-width: 0; }
+  .records .when { font-weight: 500; font-size: 14px; }
+  .records .count { font-size: 12px; color: var(--fg-3); }
+  .records .empty, .empty-note { color: var(--fg-3); font-size: 14px; padding: 18px 0; text-align: center; }
+
+  @media (max-width: 1080px) {
+    main, .full { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .topbar-inner, main { padding-left: 16px; padding-right: 16px; }
+    .controls { grid-template-columns: 1fr; }
+    .action { flex-direction: column; align-items: stretch; }
+    .brand-sub { display: none; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/></svg></div>
+      <div>
+        <div class="brand-name">{{BRAND}}</div>
+        <div class="brand-sub">同传控制台</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="pill" id="pill"><span class="dot"></span><span id="pill-text">未开始</span></span>
+      <button class="btn btn-ghost" id="logout">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>退出
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="col">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg>实时同传</h2>
+          <p class="card-desc">在接着麦克风的电脑上操作，会议期间保持本页打开</p>
+        </div>
+      </div>
+      <div class="controls">
+        <div>
+          <label class="label" for="mic">麦克风</label>
+          <div class="mic-row">
+            <select id="mic"><option value="">系统默认麦克风</option></select>
+            <button class="btn" id="test-mic">测试</button>
+          </div>
+        </div>
+        <div>
+          <label class="label" for="lang">讲话语言 → 中文</label>
+          <select id="lang">
+            <option value="en">英语</option><option value="ja">日语</option><option value="ko">韩语</option>
+            <option value="fr">法语</option><option value="de">德语</option><option value="es">西班牙语</option>
+            <option value="pt">葡萄牙语</option><option value="it">意大利语</option><option value="ru">俄语</option>
+            <option value="ar">阿拉伯语</option><option value="tr">土耳其语</option><option value="id">印尼语</option>
+            <option value="ms">马来语</option><option value="vi">越南语</option><option value="th">泰语</option>
+            <option value="nl">荷兰语</option><option value="pl">波兰语</option><option value="ro">罗马尼亚语</option>
+            <option value="cs">捷克语</option><option value="yue-CN">粤语</option><option value="sh-CN">上海话</option>
+          </select>
+        </div>
+      </div>
+      <div class="level" aria-label="麦克风音量">
+        <div class="bars" id="bars"></div>
+        <div class="tag" id="level-tag">麦克风未打开</div>
+      </div>
+      <div class="action">
+        <button class="btn btn-primary btn-lg" id="toggle">
+          <svg class="icon" viewBox="0 0 24 24" id="toggle-icon"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/></svg>
+          <span id="toggle-text">开始同传</span>
+        </button>
+        <div class="status-text" id="status">先点「测试」确认麦克风有声音，再开始同传</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 class="card-title"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M6 12h6M6 15h10"/></svg>字幕预览</h2>
+        <button class="btn btn-ghost" id="clear"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>清屏</button>
+      </div>
+      <div class="screen" id="preview"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title"><svg class="icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>观众观看</h2>
+          <p class="card-desc">观众打开链接即可观看，无需登录</p>
+        </div>
+      </div>
+      <div class="link-box">
+        <input class="field" id="view-link" readonly aria-label="观众链接">
+        <button class="btn btn-primary" id="copy-link"><svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</button>
+      </div>
+      <div class="link-actions">
+        <button class="btn" id="open-screen"><svg class="icon" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>打开字幕屏</button>
+        <button class="btn btn-danger-text" id="reset-link">重置链接</button>
+      </div>
+      <p class="hint">在投影或电视上打开字幕屏后按 F 全屏。重置链接后，旧链接立即失效。</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>字幕屏显示</h2>
+          <p class="card-desc">修改后所有字幕屏实时生效</p>
+        </div>
+      </div>
+      <div class="setting">
+        <div><div class="name">显示行数</div><div class="desc">屏幕上同时显示的字幕行数</div></div>
+        <div class="segmented" id="lines" role="group" aria-label="显示行数"></div>
+      </div>
+      <div class="setting">
+        <div><div class="name">字号</div><div class="desc">按屏幕高度的百分比</div></div>
+        <div class="size-row">
+          <input type="range" id="size" min="2" max="20" step="0.5" aria-label="字号">
+          <output id="size-value"></output>
+        </div>
+      </div>
+      <div class="setting">
+        <div><div class="name">显示原文</div><div class="desc">在中文上方显示讲话原文</div></div>
+        <label class="switch"><input type="checkbox" id="show-en"><span class="track"></span></label>
+      </div>
+    </section>
+  </div>
+
+  <div class="full">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/><path d="M8 7h8M8 11h6"/></svg>术语表</h2>
+          <p class="card-desc">人名、公司名、产品名等专有名词，提升识别和翻译准确度</p>
+        </div>
+      </div>
+      <textarea id="glossary" spellcheck="false" aria-label="术语表" placeholder="每行一个术语，例如：&#10;OKR => 目标与关键成果&#10;Kubernetes"></textarea>
+      <div class="glossary-foot">
+        <span class="hint" style="margin: 0">「原文 => 中文」指定译名；只写原文表示原样保留。下次开始同传时生效。</span>
+        <button class="btn btn-primary" id="save-glossary">保存</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>会议记录</h2>
+          <p class="card-desc">每场同传自动保存中英对照</p>
+        </div>
+        <button class="btn btn-ghost" id="refresh-records" aria-label="刷新"><svg class="icon" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg></button>
+      </div>
+      <ul class="records" id="records"><li class="empty">暂无记录</li></ul>
+    </section>
+  </div>
+</main>
+<div class="toast-host" id="toasts"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const micSelect = $("mic"), langSelect = $("lang"), toggle = $("toggle"), testMic = $("test-mic");
+  const statusEl = $("status"), preview = $("preview");
+  const LANG_NAMES = Object.fromEntries([...langSelect.options].map((o) => [o.value, o.textContent]));
+
+  // 全部用相对路径，部署在子路径（如 /interpret/）下也能用。
+  const wsUrl = (path) => {
+    const url = new URL(path, location.href);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return url.href;
+  };
+  async function api(path, body) {
+    const resp = await fetch(path, body === undefined ? {} : {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (resp.status === 401) { location.reload(); throw new Error("登录已失效"); }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.ok === false) throw new Error(data.error || "请求失败（" + resp.status + "）");
+    return data;
+  }
+  function toast(text, ok = true) {
+    const el = document.createElement("div");
+    el.className = "toast" + (ok ? "" : " err");
+    el.innerHTML = ok
+      ? '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M12 8v4M12 16h.01"/><circle cx="12" cy="12" r="10"/></svg>';
+    el.append(text);
+    $("toasts").append(el);
+    setTimeout(() => el.remove(), ok ? 2200 : 4000);
+  }
+
+  // ---------- 顶部状态 ----------
+  let startedAt = 0;
+  let timer = null;
+  function setPill(text, level) {
+    $("pill").className = "pill" + (level ? " " + level : "");
+    $("pill-text").textContent = text;
+  }
+  function startTimer() {
+    startedAt = Date.now();
+    clearInterval(timer);
+    $("pill").className = "pill ok";
+    const tick = () => {
+      const s = Math.floor((Date.now() - startedAt) / 1000);
+      const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+      const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+      const ss = String(s % 60).padStart(2, "0");
+      $("pill-text").innerHTML = `同传中 · <span class="timer">${hh}:${mm}:${ss}</span>`;
+    };
+    tick();
+    timer = setInterval(tick, 1000);
+  }
+  function stopTimer() { clearInterval(timer); timer = null; }
+  function setStatus(text, level) {
+    statusEl.textContent = text;
+    statusEl.className = "status-text" + (level === "err" ? " err" : "");
+    if (level === "err") { stopTimer(); setPill(running ? "连接异常" : "出错", "err"); }
+  }
+
+  // ---------- 音量条 ----------
+  const BAR_COUNT = 32;
+  const bars = Array.from({ length: BAR_COUNT }, () => document.createElement("i"));
+  $("bars").append(...bars);
+  let smooth = 0;
+  function showLevel(peak) {
+    smooth = Math.max(peak, smooth * 0.85);
+    const lit = Math.round(Math.min(1, smooth * 1.6) * BAR_COUNT);
+    bars.forEach((bar, i) => {
+      bar.className = i < lit ? "on" + (i >= BAR_COUNT * 0.9 ? " peak" : i >= BAR_COUNT * 0.7 ? " hot" : "") : "";
+    });
+    $("level-tag").textContent = smooth < 0.02 ? "没有声音" : smooth > 0.6 ? "音量偏大" : "音量正常";
+  }
+  function resetLevel() {
+    smooth = 0;
+    bars.forEach((bar) => { bar.className = ""; });
+    $("level-tag").textContent = "麦克风未打开";
+  }
+
+  // ---------- 观众链接、显示设置、术语表、会议记录 ----------
+  let viewToken = "";
+  const viewUrl = () => new URL("screen?key=" + encodeURIComponent(viewToken), location.href).href;
+
+  const lineButtons = [1, 2, 3, 4, 5].map((n) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = n;
+    b.onclick = () => { setLines(n); saveDisplay(); };
+    return b;
+  });
+  $("lines").append(...lineButtons);
+  let lines = 3;
+  function setLines(n) {
+    lines = n;
+    lineButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(i + 1 === n)));
+  }
+  function showDisplay(display) {
+    setLines(display.lines);
+    $("size").value = display.size;
+    $("size-value").textContent = display.size;
+    $("show-en").checked = display.show_en;
+  }
+  let displayTimer = null;
+  function saveDisplay() {
+    $("size-value").textContent = $("size").value;
+    clearTimeout(displayTimer);
+    displayTimer = setTimeout(async () => {
+      try {
+        await api("api/display", { lines, size: +$("size").value, show_en: $("show-en").checked });
+        toast("已同步到所有字幕屏");
+      } catch (e) { toast(e.message, false); }
+    }, 350);
+  }
+  $("size").oninput = saveDisplay;
+  $("show-en").onchange = saveDisplay;
+
+  $("copy-link").onclick = async () => {
+    try { await navigator.clipboard.writeText(viewUrl()); toast("观众链接已复制"); }
+    catch { $("view-link").select(); toast("请手动复制链接", false); }
+  };
+  $("view-link").onclick = () => $("view-link").select();
+  $("open-screen").onclick = () => window.open("screen", "_blank", "noopener");
+  $("reset-link").onclick = async () => {
+    if (!confirm("重置后旧链接立即失效，已经打开的观众需要用新链接重新打开。确定重置？")) return;
+    try {
+      viewToken = (await api("api/view-link/reset", {})).view_token;
+      $("view-link").value = viewUrl();
+      toast("已生成新链接，记得重新发给观众");
+    } catch (e) { toast(e.message, false); }
+  };
+  $("clear").onclick = () => api("api/clear", {}).then(() => toast("已清屏")).catch((e) => toast(e.message, false));
+
+  $("save-glossary").onclick = async () => {
+    try {
+      const data = await api("api/glossary", { text: $("glossary").value });
+      toast(`术语表已保存（${data.terms} 条），下次开始同传时生效`);
+    } catch (e) { toast(e.message, false); }
+  };
+
+  const DOC_ICON = '<svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
+  async function loadRecords() {
+    try {
+      const { items } = await api("api/transcripts");
+      const list = $("records");
+      if (!items.length) { list.innerHTML = '<li class="empty">还没有会议记录</li>'; return; }
+      list.replaceChildren(...items.map((item) => {
+        const n = item.name;
+        const li = document.createElement("li");
+        li.innerHTML = `<div class="doc">${DOC_ICON}</div><div class="meta"><div class="when"></div><div class="count"></div></div>`;
+        li.querySelector(".when").textContent = `${n.slice(0, 4)}年${+n.slice(4, 6)}月${+n.slice(6, 8)}日 ${n.slice(9, 11)}:${n.slice(11, 13)}`;
+        li.querySelector(".count").textContent = `${item.sentences} 句`;
+        const link = document.createElement("a");
+        link.className = "btn";
+        link.href = "api/transcripts/" + encodeURIComponent(n);
+        link.textContent = "下载";
+        li.append(link);
+        return li;
+      }));
+    } catch {}
+  }
+  $("refresh-records").onclick = loadRecords;
+  $("logout").onclick = async () => { await api("api/logout", {}).catch(() => {}); location.reload(); };
+
+  (async () => {
+    const data = await api("api/console");
+    viewToken = data.view_token;
+    $("view-link").value = viewUrl();
+    showDisplay(data.display);
+    $("glossary").value = data.glossary;
+    langSelect.value = data.source_language || "en";
+    loadRecords();
+  })().catch((e) => toast(e.message, false));
+
+  // ---------- 字幕预览 ----------
+  const segments = new Map();
+  function renderPreview() {
+    const ids = [...segments.keys()].sort((a, b) => a - b).slice(-4);
+    if (!ids.length) {
+      preview.innerHTML = '<div class="empty">开始同传后，译文会实时显示在这里</div>';
+      return;
+    }
+    const existing = new Map([...preview.querySelectorAll(".seg")].map((el) => [+el.dataset.id, el]));
+    preview.replaceChildren(...ids.map((id) => {
+      const seg = segments.get(id);
+      const el = existing.get(id) || document.createElement("div");
+      el.dataset.id = id;
+      el.className = "seg" + (seg.final ? "" : " interim");
+      el.innerHTML = '<div class="en"></div><div class="zh"></div>';
+      el.querySelector(".en").textContent = seg.en;
+      el.querySelector(".zh").textContent = seg.zh;
+      return el;
+    }));
+  }
+  renderPreview();
+
+  // ---------- 收音 ----------
+  let ws = null;
+  let running = false;      // 正在同传
+  let audio = null;         // { context, stream, node }
+  let wakeLock = null;
+  let retry = 1000;
+
+  function handle(message) {
+    switch (message.type) {
+      case "snapshot":
+        segments.clear();
+        for (const seg of message.segments) segments.set(seg.id, seg);
+        renderPreview();
+        break;
+      case "segment": segments.set(message.id, message); renderPreview(); break;
+      case "remove": segments.delete(message.id); renderPreview(); break;
+      case "clear": segments.clear(); renderPreview(); break;
+      case "display": showDisplay(message); break;
+      case "status":
+        if (!running) break;
+        if (message.state === "ok") {
+          setStatus(`正在把${LANG_NAMES[langSelect.value] || ""}翻译成中文`);
+          if (!timer) startTimer(); else $("pill").className = "pill ok";
+          preview.classList.add("live");
+        } else if (message.state === "starting") { setStatus("正在连接同传服务…"); setPill("连接中", "warn"); }
+        else if (message.state === "reconnecting") { setStatus("同传服务重连中，音频已缓存，不会丢失"); setPill("重连中", "warn"); }
+        else if (message.state === "error") setStatus(message.detail || "出错了", "err");
+        break;
+      case "capture":
+        if (message.state === "replaced") {
+          running = false;
+          stopAudio();
+          updateButtons();
+          setStatus("已在其他设备开始同传，本页已停止收音", "err");
+        } else if (message.state === "error") {
+          setStatus(message.detail, "err");
+        }
+        break;
+    }
+  }
+
+  function connect() {
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(wsUrl("ws/capture"));
+      socket.binaryType = "arraybuffer";
+      socket.onopen = () => { retry = 1000; ws = socket; resolve(socket); };
+      socket.onmessage = (event) => handle(JSON.parse(event.data));
+      socket.onclose = async () => {
+        if (ws !== socket) { reject(new Error("连接服务器失败")); return; }
+        ws = null;
+        const check = await fetch("api/console").catch(() => null);
+        if (check && check.status === 401) { location.reload(); return; }
+        if (running) {
+          setStatus("网络断开，正在重连…");
+          setPill("重连中", "warn");
+          setTimeout(reconnect, retry);
+          retry = Math.min(retry * 2, 8000);
+        } else {
+          setTimeout(() => connect().catch(() => {}), retry);
+        }
+      };
+    });
+  }
+
+  async function reconnect() {
+    if (!running) return;
+    try {
+      const socket = await connect();
+      socket.send(JSON.stringify({ type: "start", source_language: langSelect.value }));
+    } catch {
+      setTimeout(reconnect, retry);
+      retry = Math.min(retry * 2, 8000);
+    }
+  }
+
+  // AudioWorklet：把麦克风的浮点音频降采样成 16kHz 16bit，每 80ms 一包发给主线程。
+  const WORKLET = `
+    class Pcm16k extends AudioWorkletProcessor {
+      constructor() {
+        super();
+        this.ratio = sampleRate / 16000;
+        this.pos = 0; this.acc = 0; this.n = 0;
+        this.buf = new Int16Array(1280); this.len = 0;
+      }
+      process(inputs) {
+        const ch = inputs[0] && inputs[0][0];
+        if (!ch) return true;
+        for (let i = 0; i < ch.length; i++) {
+          this.acc += ch[i]; this.n += 1; this.pos += 1;
+          if (this.pos >= this.ratio) {
+            this.pos -= this.ratio;
+            const v = Math.max(-1, Math.min(1, this.acc / this.n));
+            this.buf[this.len++] = v < 0 ? v * 0x8000 : v * 0x7fff;
+            this.acc = 0; this.n = 0;
+            if (this.len === this.buf.length) {
+              const out = this.buf.slice();
+              this.port.postMessage(out.buffer, [out.buffer]);
+              this.len = 0;
+            }
+          }
+        }
+        return true;
+      }
+    }
+    registerProcessor("pcm16k", Pcm16k);
+  `;
+
+  // 打开麦克风：音量条一直显示；只有在同传中才把音频发给服务器。
+  async function startAudio() {
+    if (!window.isSecureContext) throw new Error("必须通过 https 打开本页才能使用麦克风");
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: micSelect.value ? { exact: micSelect.value } : undefined,
+        channelCount: 1, echoCancellation: false, noiseSuppression: true, autoGainControl: true,
+      },
+    });
+    const context = new AudioContext();
+    const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
+    await context.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    const source = context.createMediaStreamSource(stream);
+    const node = new AudioWorkletNode(context, "pcm16k");
+    node.port.onmessage = (event) => {
+      const pcm = new Int16Array(event.data);
+      let peak = 0;
+      for (let i = 0; i < pcm.length; i++) peak = Math.max(peak, Math.abs(pcm[i]));
+      showLevel(peak / 32768);
+      if (running && ws && ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 1 << 20) ws.send(event.data);
+    };
+    source.connect(node);
+    audio = { context, stream, node };
+    await listMics();
+  }
+
+  function stopAudio() {
+    if (!audio) return;
+    audio.node.port.onmessage = null;
+    audio.stream.getTracks().forEach((t) => t.stop());
+    audio.context.close();
+    audio = null;
+    resetLevel();
+  }
+
+  function micError(error) {
+    if (error.name === "NotAllowedError") return "浏览器没有麦克风权限：点地址栏左侧的图标，把麦克风设为允许后刷新页面";
+    if (error.name === "NotFoundError" || error.name === "OverconstrainedError") return "找不到这个麦克风，请检查是否插好，或换一个选择";
+    if (error.name === "NotReadableError") return "麦克风被其他程序占用，或系统没有给浏览器麦克风权限";
+    return error.message.startsWith("必须") ? error.message : "麦克风打开失败：" + error.message;
+  }
+
+  async function listMics() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const current = micSelect.value || localStorage.getItem("capture-mic") || "";
+    const inputs = devices.filter((d) => d.kind === "audioinput" && d.deviceId !== "default");
+    micSelect.replaceChildren(new Option("系统默认麦克风", ""),
+      ...inputs.map((d, i) => new Option(d.label || "麦克风 " + (i + 1), d.deviceId)));
+    if ([...micSelect.options].some((o) => o.value === current)) micSelect.value = current;
+  }
+  micSelect.onchange = async () => {
+    localStorage.setItem("capture-mic", micSelect.value);
+    if (audio) {
+      stopAudio();
+      await startAudio().catch((e) => setStatus(micError(e), "err"));
+    }
+  };
+
+  // 防止收音电脑息屏休眠；页面切到后台时系统会自动释放，回到前台再申请。
+  async function keepAwake() {
+    wakeLock = await navigator.wakeLock?.request("screen").catch(() => null) ?? null;
+    wakeLock?.addEventListener("release", () => { wakeLock = null; });
+  }
+
+  const PLAY = '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/>';
+  const STOP = '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>';
+  function updateButtons() {
+    $("toggle-text").textContent = running ? "停止同传" : "开始同传";
+    $("toggle-icon").innerHTML = running ? STOP : PLAY;
+    toggle.classList.toggle("running", running);
+    langSelect.disabled = running;
+    testMic.textContent = audio && !running ? "关闭" : "测试";
+    testMic.disabled = running;
+    if (!running) {
+      stopTimer();
+      preview.classList.remove("live");
+      if (!$("pill").classList.contains("err")) setPill("未开始");
+    }
+  }
+
+  testMic.onclick = async () => {
+    if (audio) {
+      stopAudio();
+      setStatus("先点「测试」确认麦克风有声音，再开始同传");
+    } else {
+      try {
+        await startAudio();
+        setStatus("对着麦克风说话，音量条应该跳动");
+      } catch (e) { setStatus(micError(e), "err"); }
+    }
+    updateButtons();
+  };
+
+  toggle.onclick = async () => {
+    toggle.disabled = true;
+    try {
+      if (!running) {
+        setPill("连接中", "warn");
+        if (!audio) {
+          setStatus("正在打开麦克风…");
+          try { await startAudio(); } catch (e) { throw new Error(micError(e)); }
+        }
+        setStatus("正在连接同传服务…");
+        const socket = ws || await connect();
+        running = true;
+        socket.send(JSON.stringify({ type: "start", source_language: langSelect.value }));
+        await keepAwake();
+      } else {
+        running = false;
+        if (ws) ws.send(JSON.stringify({ type: "stop" }));
+        stopAudio();
+        wakeLock?.release();
+        wakeLock = null;
+        setStatus("已停止，本场会议记录已保存");
+        setTimeout(loadRecords, 3000);
+      }
+    } catch (error) {
+      running = false;
+      stopAudio();
+      setStatus(error.message, "err");
+    } finally {
+      toggle.disabled = false;
+      updateButtons();
+    }
+  };
+
+  window.addEventListener("beforeunload", (event) => {
+    if (running) { event.preventDefault(); event.returnValue = ""; }
+  });
+  document.addEventListener("visibilitychange", async () => {
+    if (running && document.visibilityState === "visible" && !wakeLock) await keepAwake();
+  });
+
+  updateButtons();
+  connect().catch(() => setStatus("连接服务器失败，请刷新页面", "err"));
+  navigator.mediaDevices?.enumerateDevices && listMics().catch(() => {});
+})();
+</script>
+</body>
+</html>

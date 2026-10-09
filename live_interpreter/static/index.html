@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>实时字幕 · {{BRAND}}</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --lines: 3;
+    --size: 6;
+    --line-height: 1.5;
+    --fg: #ffffff;
+    --dim: rgba(255, 255, 255, 0.55);
+    --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #000; color: var(--fg); font-family: var(--font);
+    -webkit-font-smoothing: antialiased; cursor: none;
+  }
+  body.pointer, body.debug { cursor: auto; }
+
+  .stage { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 6vw 7vh; }
+  .viewport {
+    /* 字号按屏幕高度的百分比；竖屏手机上改用宽度，避免一行只放几个字。 */
+    font-size: min(calc(var(--size) * 1vh), calc(var(--size) * 1vw));
+    line-height: var(--line-height);
+    height: calc(var(--lines) * var(--line-height) * 1em);
+    overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
+    font-weight: 600; letter-spacing: 0.03em;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+  }
+  /* 同传按短句返回，连续排版才能用满行数；显示原文时改为一句一段方便对照。 */
+  .flow { flex: none; }
+  .seg { display: inline; }
+  .seg.new .zh { animation: fade 0.35s ease-out; }
+  .seg.interim .zh { color: var(--dim); }
+  .seg .en { display: none; font-size: 0.42em; line-height: 1.45; color: var(--dim); font-weight: 500; letter-spacing: 0; margin-bottom: 0.15em; }
+  body.show-en .seg { display: block; margin-top: 0.35em; }
+  /* 对照模式行高不一，不按行数裁剪（会切到字），改为只渲染最近几句。 */
+  body.show-en .viewport { height: auto; }
+  body.show-en .seg .en { display: block; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* 还没有字幕时的等待画面 */
+  .standby {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vh;
+    transition: opacity 0.6s; pointer-events: none;
+  }
+  body.has-text .standby { opacity: 0; }
+  .standby .mark { width: 9vh; height: 9vh; border-radius: 2.4vh; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: grid; place-items: center; box-shadow: 0 1.5vh 5vh rgba(99, 102, 241, 0.35); }
+  .standby .mark svg { width: 55%; height: 55%; stroke: #fff; fill: none; stroke-width: 2.2; stroke-linecap: round; }
+  .standby .mark svg path { animation: eq 1.4s ease-in-out infinite; transform-origin: center; }
+  .standby .mark svg path:nth-child(2) { animation-delay: 0.15s; }
+  .standby .mark svg path:nth-child(3) { animation-delay: 0.3s; }
+  .standby .mark svg path:nth-child(4) { animation-delay: 0.45s; }
+  .standby .mark svg path:nth-child(5) { animation-delay: 0.6s; }
+  @keyframes eq { 0%, 100% { transform: scaleY(0.55); } 50% { transform: scaleY(1); } }
+  .standby .name { font-size: 4vh; font-weight: 700; letter-spacing: 0.06em; }
+  .standby .tip { font-size: 2.2vh; color: rgba(255, 255, 255, 0.45); letter-spacing: 0.1em; }
+  .standby.error .mark { background: #3f3f46; box-shadow: none; }
+  .standby.error .mark svg path { animation: none; }
+  .standby.error .tip { color: #fca5a5; }
+
+  /* 正在讲话的提示 */
+  .listening { position: absolute; right: 3vw; bottom: 3vh; display: flex; gap: 0.7vh; align-items: flex-end; height: 2.4vh; opacity: 0; transition: opacity 0.3s; }
+  .listening.active { opacity: 0.6; }
+  .listening span { width: 0.5vh; height: 100%; border-radius: 0.25vh; background: #fff; animation: eq 0.9s ease-in-out infinite; }
+  .listening span:nth-child(2) { animation-delay: 0.15s; }
+  .listening span:nth-child(3) { animation-delay: 0.3s; }
+
+  /* 连接状态 */
+  .status {
+    position: absolute; left: 50%; top: 3vh; transform: translateX(-50%);
+    display: none; align-items: center; gap: 10px; padding: 8px 16px; border-radius: 999px;
+    background: rgba(245, 158, 11, 0.15); color: #fcd34d; font-size: 14px; backdrop-filter: blur(6px);
+  }
+  .status.visible { display: flex; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+  /* 首次打开的操作提示 */
+  .hint {
+    position: absolute; left: 50%; bottom: 2.4vh; transform: translateX(-50%);
+    font-size: 13px; color: rgba(255, 255, 255, 0.4); transition: opacity 0.8s; white-space: nowrap;
+  }
+  .hint.hide { opacity: 0; }
+
+  .debug-panel {
+    position: absolute; top: 3vh; right: 3vw; width: min(40vw, 420px); padding: 14px 16px; border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06); font-size: 13px; line-height: 1.6; color: rgba(255, 255, 255, 0.65); display: none;
+  }
+  body.debug .debug-panel { display: block; }
+  .meter { height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; margin: 6px 0 10px; }
+  .meter div { height: 100%; width: 0; background: #34d399; transition: width 0.15s; }
+  .debug-panel kbd { border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px; padding: 0 5px; font: 12px var(--font); }
+</style>
+</head>
+<body>
+<div class="standby" id="standby">
+  <div class="mark"><svg viewBox="0 0 24 24"><path d="M4 10v4"/><path d="M8 6v12"/><path d="M12 3v18"/><path d="M16 7v10"/><path d="M20 10v4"/></svg></div>
+  <div class="name">{{BRAND}}</div>
+  <div class="tip" id="standby-tip">实时字幕将在这里显示</div>
+</div>
+<div class="stage"><div class="viewport" id="viewport"></div></div>
+<div class="listening" id="listening"><span></span><span></span><span></span></div>
+<div class="status" id="status"></div>
+<div class="hint" id="hint">点击屏幕或按 F 全屏</div>
+<div class="debug-panel">
+  <div>收音端音量</div>
+  <div class="meter"><div id="meter"></div></div>
+  <div id="debug-status">状态：-</div>
+  <div style="margin-top: 8px">
+    <kbd>F</kbd> 全屏　<kbd>+</kbd> <kbd>-</kbd> 字号　<kbd>E</kbd> 原文　<kbd>C</kbd> 清屏　<kbd>D</kbd> 调试
+  </div>
+</div>
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const keyQuery = params.get("key") ? "?key=" + encodeURIComponent(params.get("key")) : "";
+  // 全部用相对路径，部署在子路径（如 /interpret/）下也能用。
+  const wsUrl = (path) => {
+    const url = new URL(path + keyQuery, location.href);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return url.href;
+  };
+  const $ = (id) => document.getElementById(id);
+  const root = document.documentElement;
+  const viewport = $("viewport");
+  const segments = new Map();
+  const MAX_SEGMENTS = 30;
+
+  // 显示设置以控制台下发的为准；网址参数可以单独覆盖某一块屏幕；+/- 键只临时调整本屏。
+  let size = 6;
+  let lines = 3;
+  const applySize = () => {
+    size = Math.min(20, Math.max(2, size));
+    root.style.setProperty("--size", String(size));
+  };
+  function applyDisplay(display) {
+    size = parseFloat(params.get("size") || display.size || size);
+    lines = parseInt(params.get("lines") || display.lines || lines, 10);
+    applySize();
+    root.style.setProperty("--lines", String(lines));
+    const showEn = params.has("en") ? params.get("en") === "1" : Boolean(display.show_en);
+    document.body.classList.toggle("show-en", showEn);
+    render();
+  }
+  if (params.get("debug") === "1") document.body.classList.add("debug");
+
+  // 按 id 复用节点，只有新出现的句子才播放淡入动画。
+  const flow = document.createElement("div");
+  flow.className = "flow";
+  viewport.append(flow);
+  const nodes = new Map();
+  function render() {
+    let ids = [...segments.keys()].sort((a, b) => a - b);
+    while (ids.length > MAX_SEGMENTS) segments.delete(ids.shift());
+    ids = ids.filter((id) => segments.get(id).zh);
+    if (document.body.classList.contains("show-en")) ids = ids.slice(-lines);
+    const keep = new Set(ids);
+    for (const [id, el] of nodes) if (!keep.has(id)) { el.remove(); nodes.delete(id); }
+    let prev = null;
+    for (const id of ids) {
+      const seg = segments.get(id);
+      let el = nodes.get(id);
+      if (!el) {
+        el = document.createElement("span");
+        el.innerHTML = '<span class="en"></span><span class="zh"></span>';
+        el.dataset.fresh = "1";
+        el.addEventListener("animationend", () => { delete el.dataset.fresh; el.classList.remove("new"); }, { once: true });
+        nodes.set(id, el);
+      }
+      el.className = "seg" + (el.dataset.fresh ? " new" : "") + (seg.final ? "" : " interim");
+      el.firstChild.textContent = seg.en;
+      el.lastChild.textContent = seg.zh;
+      // 只在位置不对时移动节点，避免已有句子重复播放动画。
+      const expectedNext = prev ? prev.nextSibling : flow.firstChild;
+      if (expectedNext !== el) flow.insertBefore(el, expectedNext);
+      prev = el;
+    }
+    document.body.classList.toggle("has-text", ids.length > 0);
+  }
+  applyDisplay({});
+
+  const STATUS_TEXT = { reconnecting: "同传服务重连中…" };
+  function setStatus(status) {
+    const text = status.state === "error" ? status.detail : (STATUS_TEXT[status.state] || "");
+    $("status").textContent = text;
+    $("status").classList.toggle("visible", Boolean(text));
+    $("debug-status").textContent = "状态：" + status.state + (status.detail ? "，" + status.detail : "");
+  }
+  function showFatal(text) {
+    $("standby").classList.add("error");
+    $("standby-tip").textContent = text;
+    document.body.classList.remove("has-text");
+    $("hint").classList.add("hide");
+  }
+
+  function handle(message) {
+    switch (message.type) {
+      case "snapshot":
+        segments.clear();
+        for (const seg of message.segments) segments.set(seg.id, seg);
+        $("listening").classList.toggle("active", message.listening);
+        setStatus(message.status);
+        applyDisplay(message.display || {});
+        break;
+      case "display": applyDisplay(message); break;
+      case "segment": segments.set(message.id, message); render(); break;
+      case "remove": segments.delete(message.id); render(); break;
+      case "clear": segments.clear(); render(); break;
+      case "listening": $("listening").classList.toggle("active", message.active); break;
+      case "status": setStatus(message); break;
+      case "level": $("meter").style.width = Math.min(100, message.value * 100) + "%"; break;
+    }
+  }
+
+  let retry = 500;
+  function connect() {
+    const ws = new WebSocket(wsUrl("ws"));
+    ws.onopen = () => { retry = 500; };
+    ws.onmessage = (event) => handle(JSON.parse(event.data));
+    ws.onclose = async () => {
+      // 浏览器拿不到 WebSocket 握手的状态码，用接口确认是不是链接失效。
+      const check = await fetch("api/state" + keyQuery).catch(() => null);
+      if (check && check.status === 403) {
+        showFatal(params.get("key") ? "观众链接已失效，请向主持人索取新链接" : "请使用主持人分享的观众链接打开");
+        return;
+      }
+      setStatus({ state: "error", detail: "网络断开，正在重新连接…" });
+      setTimeout(connect, retry);
+      retry = Math.min(retry * 2, 5000);
+    };
+  }
+  connect();
+
+  // 全屏：电脑按 F，平板 / 手机点击屏幕。
+  function toggleFullscreen() {
+    const el = document.documentElement;
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } else {
+      (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {});
+    }
+  }
+  document.addEventListener("click", toggleFullscreen);
+  setTimeout(() => $("hint").classList.add("hide"), 6000);
+  document.addEventListener("fullscreenchange", () => $("hint").classList.add("hide"));
+
+  // 鼠标移动时短暂显示指针，静止 2 秒后隐藏。
+  let pointerTimer = null;
+  document.addEventListener("mousemove", () => {
+    document.body.classList.add("pointer");
+    clearTimeout(pointerTimer);
+    pointerTimer = setTimeout(() => document.body.classList.remove("pointer"), 2000);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const key = event.key.toLowerCase();
+    if (key === "+" || key === "=") { size += 0.5; applySize(); }
+    else if (key === "-") { size -= 0.5; applySize(); }
+    else if (key === "e") { document.body.classList.toggle("show-en"); render(); }
+    else if (key === "d") document.body.classList.toggle("debug");
+    else if (key === "f") toggleFullscreen();
+    else if (key === "c") fetch("api/clear" + keyQuery, { method: "POST" });
+  });
+})();
+</script>
+</body>
+</html>

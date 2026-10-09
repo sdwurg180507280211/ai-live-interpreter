@@ -1,0 +1,10 @@
+.env
+transcripts/
+glossary.txt
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+.local-test/
+data/
+deploy/server.env

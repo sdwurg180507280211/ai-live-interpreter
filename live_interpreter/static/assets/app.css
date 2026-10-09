@@ -1,0 +1,135 @@
+/* 登录页和控制台共用的样式。字幕屏（index.html）是投屏用的，样式单独写。 */
+:root {
+  --bg: #f4f5f9;
+  --surface: #ffffff;
+  --surface-2: #f8f9fc;
+  --fg: #111827;
+  --fg-2: #4b5563;
+  --fg-3: #8a93a3;
+  --line: #e6e8ef;
+  --line-strong: #d5d9e3;
+  --brand: #4f46e5;
+  --brand-2: #7c3aed;
+  --brand-soft: #eef0ff;
+  --ok: #10b981;
+  --ok-soft: #e7f8f1;
+  --warn: #f59e0b;
+  --warn-soft: #fff6e5;
+  --danger: #ef4444;
+  --danger-soft: #fdecec;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(17, 24, 39, 0.04), 0 4px 16px rgba(17, 24, 39, 0.05);
+  --gradient: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+svg.icon { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 品牌标识 */
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  width: 36px; height: 36px; border-radius: 10px; background: var(--gradient);
+  display: grid; place-items: center; color: #fff; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+.brand-mark svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 2.2; stroke-linecap: round; }
+.brand-name { font-size: 17px; font-weight: 700; letter-spacing: 0.01em; }
+.brand-sub { font-size: 12px; color: var(--fg-3); }
+
+/* 按钮 */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 38px; padding: 0 16px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg);
+  font: 500 14px/1 var(--font); cursor: pointer; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.05s;
+}
+.btn:hover { background: var(--surface-2); border-color: #c4c9d6; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.btn:focus-visible, .field:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(79, 70, 229, 0.25); outline-offset: 1px; }
+.btn-primary { background: var(--gradient); border: 0; color: #fff; box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28); }
+.btn-primary:hover { background: var(--gradient); filter: brightness(1.06); }
+.btn-ghost { border-color: transparent; background: transparent; color: var(--fg-2); }
+.btn-ghost:hover { background: rgba(17, 24, 39, 0.05); border-color: transparent; }
+.btn-danger-text { border-color: transparent; background: transparent; color: var(--danger); padding: 0 8px; }
+.btn-danger-text:hover { background: var(--danger-soft); border-color: transparent; }
+.btn-lg { height: 52px; padding: 0 28px; font-size: 16px; font-weight: 600; border-radius: 12px; }
+
+/* 表单 */
+.field, select, textarea {
+  width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg); font: 14px var(--font);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+select {
+  appearance: none; padding-right: 36px; cursor: pointer;
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a93a3' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;
+}
+select:disabled { background-color: var(--surface-2); color: var(--fg-3); cursor: default; }
+.field:hover, select:hover, textarea:hover { border-color: #c4c9d6; }
+.field:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); outline: none; }
+textarea { height: auto; min-height: 168px; padding: 12px; font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+.label { display: block; font-size: 13px; font-weight: 500; color: var(--fg-2); margin-bottom: 6px; }
+
+/* 开关 */
+.switch { position: relative; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+.switch .track { width: 40px; height: 22px; border-radius: 11px; background: #d5d9e3; transition: background 0.2s; position: relative; flex: none; }
+.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.2s; }
+.switch input:checked + .track { background: var(--brand); }
+.switch input:checked + .track::after { transform: translateX(18px); }
+.switch input:focus-visible + .track { outline: 3px solid rgba(79, 70, 229, 0.25); outline-offset: 2px; }
+
+/* 分段选择 */
+.segmented { display: inline-flex; padding: 3px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; gap: 2px; }
+.segmented button {
+  min-width: 40px; height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--fg-2); font: 500 14px var(--font); cursor: pointer;
+}
+.segmented button:hover { color: var(--fg); }
+.segmented button[aria-pressed="true"] { background: var(--surface); color: var(--brand); box-shadow: 0 1px 3px rgba(17, 24, 39, 0.12); }
+
+/* 滑块 */
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: var(--line); outline: none; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid var(--brand); box-shadow: 0 1px 4px rgba(0,0,0,0.15); cursor: pointer; }
+input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--brand); cursor: pointer; }
+
+/* 卡片 */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px 24px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.card-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 16px; font-weight: 650; }
+.card-title .icon { color: var(--brand); }
+.card-desc { margin: 4px 0 0; color: var(--fg-3); font-size: 13px; }
+.hint { color: var(--fg-3); font-size: 13px; line-height: 1.6; margin: 12px 0 0; }
+
+/* 状态标签 */
+.pill { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 15px; font-size: 13px; font-weight: 500; background: var(--surface-2); color: var(--fg-2); border: 1px solid var(--line); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #b7bdc9; }
+.pill.ok { background: var(--ok-soft); color: #047857; border-color: transparent; }
+.pill.ok .dot { background: var(--ok); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); animation: ping 1.6s infinite; }
+.pill.warn { background: var(--warn-soft); color: #b45309; border-color: transparent; }
+.pill.warn .dot { background: var(--warn); }
+.pill.err { background: var(--danger-soft); color: #b91c1c; border-color: transparent; }
+.pill.err .dot { background: var(--danger); }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); } 80%, 100% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); } }
+
+/* 提示消息 */
+.toast-host { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); display: grid; gap: 8px; z-index: 100; pointer-events: none; }
+.toast {
+  display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-radius: 12px; background: #111827; color: #fff;
+  font-size: 14px; box-shadow: 0 10px 30px rgba(17, 24, 39, 0.25); animation: toast-in 0.2s ease-out;
+}
+.toast.err { background: #b91c1c; }
+.toast svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
